@@ -1,10 +1,10 @@
 /*
  *
  * Copyright (c) [2022] by InvenSense, Inc.
- * 
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
@@ -26,7 +26,7 @@ void setup() {
   while(!Serial) {}
 
   // Initializing the ICM42670
-  ret = IMU.begin();
+  ret = IMU.begin(1, 0, 400000);
   if (ret != 0) {
     Serial.print("ICM42670 initialization failed: ");
     Serial.println(ret);
