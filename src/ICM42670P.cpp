@@ -1,10 +1,10 @@
 /*
  *
  * Copyright (c) [2022] by InvenSense, Inc.
- * 
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
@@ -14,7 +14,7 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
- 
+
 #include "Arduino.h"
 #include "ICM42670P.h"
 #include "imu/inv_imu_apex.h"
@@ -43,7 +43,7 @@ static inv_imu_sensor_event_t* event;
 
 // ICM42670 constructor for I2c interface
 ICM42670::ICM42670(TwoWire &i2c_ref,bool lsb, uint32_t freq) {
-  i2c = &i2c_ref; 
+  i2c = &i2c_ref;
   i2c_address = ICM42670_I2C_ADDRESS | (lsb ? 0x1 : 0);
   use_spi = false;
   spi = NULL;
@@ -58,7 +58,7 @@ ICM42670::ICM42670(TwoWire &i2c_ref,bool lsb, uint32_t freq) {
 
 // ICM42670 constructor for i2c interface, default frequency
 ICM42670::ICM42670(TwoWire &i2c_ref,bool lsb) {
-  i2c = &i2c_ref; 
+  i2c = &i2c_ref;
   i2c_address = ICM42670_I2C_ADDRESS | (lsb ? 0x1 : 0);
   use_spi = false;
   spi = NULL;
@@ -69,7 +69,7 @@ ICM42670::ICM42670(TwoWire &i2c_ref,bool lsb) {
 // ICM42670 constructor for spi interface
 ICM42670::ICM42670(SPIClass &spi_ref,uint8_t cs_id, uint32_t freq) {
   spi = &spi_ref;
-  spi_cs = cs_id; 
+  spi_cs = cs_id;
   use_spi = true;
   i2c = NULL;
   i2c_address = 0;
@@ -84,7 +84,7 @@ ICM42670::ICM42670(SPIClass &spi_ref,uint8_t cs_id, uint32_t freq) {
 // ICM42670 constructor for spi interface, default frequency
 ICM42670::ICM42670(SPIClass &spi_ref,uint8_t cs_id) {
   spi = &spi_ref;
-  spi_cs = cs_id; 
+  spi_cs = cs_id;
   use_spi = true;
   i2c = NULL;
   i2c_address = 0;
@@ -122,7 +122,7 @@ int ICM42670::begin() {
   }
   icm_driver.sensor_event_cb = event_cb;
   int1_config = { (inv_imu_interrupt_value)0 };
-  
+
   /* Check WHOAMI */
   rc = inv_imu_get_who_am_i(&icm_driver, &who_am_i);
   if(rc != 0) {
@@ -131,7 +131,67 @@ int ICM42670::begin() {
   if (who_am_i != INV_IMU_WHOAMI) {
     return -3;
   }
-  
+
+  /*
+   * Configure interrupts pins
+   * - Polarity High
+   * - Pulse mode
+   * - Push-Pull drive
+  */
+  int1_pin_config.int_polarity = INT_CONFIG_INT1_POLARITY_HIGH;
+  int1_pin_config.int_mode     = INT_CONFIG_INT1_MODE_PULSED;
+  int1_pin_config.int_drive    = INT_CONFIG_INT1_DRIVE_CIRCUIT_PP;
+  inv_imu_set_pin_config_int1(&icm_driver, &int1_pin_config);
+
+  /* All APEX off */
+  apex_tilt_enable = false;
+  apex_pedometer_enable = false;
+
+  // successful init, return 0
+  return 0;
+}
+
+/* starts communication with the ICM42670 */
+int ICM42670::begin(uint8_t sda, uint8_t scl, uint16_t freq) {
+  struct inv_imu_serif icm_serif;
+  int rc = 0;
+  uint8_t who_am_i;
+  inv_imu_int1_pin_config_t int1_pin_config;
+
+  if (i2c != NULL) {
+    i2c->begin(sda, scl, freq);
+    i2c->setClock(clk_freq);
+    icm_serif.serif_type = UI_I2C;
+    icm_serif.read_reg  = i2c_read;
+    icm_serif.write_reg = i2c_write;
+  } else {
+    spi->begin();
+    pinMode(spi_cs,OUTPUT);
+    digitalWrite(spi_cs,HIGH);
+    icm_serif.serif_type = UI_SPI4;
+    icm_serif.read_reg  = spi_read;
+    icm_serif.write_reg = spi_write;
+  }
+  /* Initialize serial interface between MCU and Icm43xxx */
+  icm_serif.context   = (void*)this;
+  icm_serif.max_read  = 2560; /* maximum number of bytes allowed per serial read */
+  icm_serif.max_write = 2560; /* maximum number of bytes allowed per serial write */
+  rc = inv_imu_init(&icm_driver, &icm_serif, NULL);
+  if (rc != INV_ERROR_SUCCESS) {
+    return rc;
+  }
+  icm_driver.sensor_event_cb = event_cb;
+  int1_config = { (inv_imu_interrupt_value)0 };
+
+  /* Check WHOAMI */
+  rc = inv_imu_get_who_am_i(&icm_driver, &who_am_i);
+  if(rc != 0) {
+    return -2;
+  }
+  if (who_am_i != INV_IMU_WHOAMI) {
+    return -3;
+  }
+
   /*
    * Configure interrupts pins
    * - Polarity High
@@ -306,7 +366,7 @@ int ICM42670::startPedometer(uint8_t intpin, ICM42670_irq_handler handler)
 int ICM42670::getPedometer(uint32_t& step_count, float& step_cadence, const char*& activity)
 {
   int rc = 0;
-  
+
   /* Read APEX interrupt status */
   rc |= updateApex();
 
@@ -326,7 +386,7 @@ int ICM42670::getPedometer(uint32_t& step_count, float& step_cadence, const char
 
     rc |= inv_imu_apex_get_data_activity(&icm_driver, &apex_data0);
     // to do: detect step counter overflow?
-    step_count = apex_data0.step_cnt + step_cnt_ovflw*(uint32_t)UINT16_MAX;	
+    step_count = apex_data0.step_cnt + step_cnt_ovflw*(uint32_t)UINT16_MAX;
     /* Converting u6.2 to float */
     nb_samples = (apex_data0.step_cadence >> 2) +
         (float)(apex_data0.step_cadence & 0x03) * 0.25f;
@@ -338,7 +398,7 @@ int ICM42670::getPedometer(uint32_t& step_count, float& step_cadence, const char
     }
     activity = APEX_ACTIVITY[apex_data0.activity_class];
   } else {
-    return -11;  
+    return -11;
   }
 
   return rc;
@@ -367,7 +427,7 @@ int ICM42670::startWakeOnMotion(uint8_t intpin, ICM42670_irq_handler handler)
 
   enableInterrupt(intpin,handler);
 
-  /* 
+  /*
    * Optimize power consumption:
    * - Disable FIFO usage.
    * - Set 2X averaging.

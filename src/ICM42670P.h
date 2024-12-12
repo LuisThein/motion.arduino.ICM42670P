@@ -1,10 +1,10 @@
 /*
  *
  * Copyright (c) [2022] by InvenSense, Inc.
- * 
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
@@ -14,7 +14,7 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
- 
+
 #ifndef ICM42670_H
 #define ICM42670_H
 
@@ -39,6 +39,7 @@ class ICM42670 {
     ICM42670(SPIClass &spi,uint8_t chip_select_id);
     ICM42670(SPIClass &spi,uint8_t cs_id, uint32_t freq);
     int begin();
+    int begin(uint8_t sda, uint8_t scl, uint16_t freq);
     int startAccel(uint16_t odr, uint16_t fsr);
     int startGyro(uint16_t odr, uint16_t fsr);
     int getDataFromRegisters(inv_imu_sensor_event_t& evt);
